@@ -42,3 +42,6 @@ if __name__ == '__main__':
     args = p.parse_args()
     log_gpus(args.name,args.output_dir)
     
+
+
+
