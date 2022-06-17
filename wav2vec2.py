@@ -276,23 +276,3 @@ if __name__ == '__main__':
     args = p.parse_args()
     transcribe(args)
 
-        
-
-def force_unload_pipeline_from_gpu(pipeline, device = -1):
-    ''' this clears all gpu memory but could potentially clear other peoples
-    processes. also gives an error when you try to reload pipe line'''
-    # del variable in function does not work
-    if device == -1: return
-    # global pipeline
-    del pipeline
-    d = cuda.select_device(device)
-    d.reset()
-
-def unload_pipeline_from_gpu(pipeline, model = None):
-    '''does not remove all memory from gpu'''
-    # del variable in function does not work
-    # global pipeline
-    del pipeline
-    if model: del model
-    torch.cuda.empty_cache()
-
