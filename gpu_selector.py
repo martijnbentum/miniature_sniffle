@@ -1,5 +1,6 @@
 import gpu_logger
 import os 
+import socket
 import time
 
 d ={'mlp03':'rarity','mlp10':'thunderlane','mlp12':'snips','mlp13':'mistmane'}
@@ -69,12 +70,24 @@ class Selector:
         '''number of busy gpus.'''
         return len(self.overload) + len(self.no_memory)
 
+    def device_available(self, device):
+        name = socket.gethostname()
+        for gpu in self.gpus:
+            if gpu.name == name and gpu.device == device: return True
+        return False
+
+    def get_available_divice_on_this_server(self):
+        name = socket.gethostname()
+        for gpu in self.gpus:
+            if gpu.name == name: return gpu.device
+        return None
+
 class Gpu:
     '''object that contains info about a single gpu device.'''
     def __init__(self,line):
-    '''object that contains info about a single gpu device.
-    line    one line from the gpu logger file
-    '''
+        '''object that contains info about a single gpu device.
+        line    one line from the gpu logger file
+        '''
         self.line = line.split('\t')
         if len(self.line) == 8:
             self._read_line()
