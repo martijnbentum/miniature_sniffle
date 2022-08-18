@@ -1,4 +1,5 @@
 import argparse
+import argument_handler 
 import audio
 import glob
 import gpu_selector as gpus
@@ -22,8 +23,6 @@ from transformers import AutomaticSpeechRecognitionPipeline as ap
 default_recognizer_dir = "/vol/bigdata2/datasets2/SSHOC-T44-LISpanel-2021/"
 default_recognizer_dir += "TEXT_ANALYSIS/homed_lm_recognizers/cgn/"
 
-input_directory = '/vol/tensusers/mbentum/AUDIOSERVER/INPUT/'
-output_directory = '/vol/tensusers/mbentum/AUDIOSERVER/OUTPUT/'
 status_directory = '/vol/tensusers/mbentum/AUDIOSERVER/STATUS/'
 
 def load_model(recognizer_dir = default_recognizer_dir):
@@ -81,7 +80,6 @@ def _make_decoding_output_filename(audio_filename, output_dir):
     make a filename for transcription based on audio_filename 
     and output_dir.
     '''
-    if not output_dir: output_dir = output_directory
     filename = audio_filename.replace('.wav','.output')
     filename = output_dir + filename.split('/')[-1]
     return filename
@@ -110,17 +108,17 @@ def _table2str(table):
     return '\n'.join(output)
 
 class Transcriber:
-    '''transcribe audio files in input_dir.'''
+    '''transcribe audio files in input_dir or the audio file filename.'''
     def __init__(self, model_dir = None, input_dir = None, output_dir = None,
+        model = None, pipeline = None, device = -1, filename = ''):
         '''transcribe audio files in input_dir
         model_dir       directory of the wav2vec2 model
         input_dir       directory for audio files that need to be transcribed
         output_dir      directory for output files
         '''
-        model = None, pipeline = None, device = -1):
         self.model_dir = model_dir if model_dir else default_recognizer_dir
-        self.input_dir = input_dir if input_dir else input_directory
-        self.output_dir = output_dir if output_dir else output_directory
+        self.input_dir = input_dir 
+        self.output_dir = output_dir 
         self.device = device
         if pipeline: self.pipeline = pipeline
         elif model: 
@@ -132,7 +130,12 @@ class Transcriber:
         self.did_transcription= False
     
     def load_audio_filenames(self):
-        self.audio_filenames = glob.glob(self.input_dir + '*.wav')
+        if self.input_dir:
+            self.audio_filenames = glob.glob(self.input_dir + '*.wav')
+        else:
+            self.audio_filenames = [self.filename]
+        m ='transcribed audio files' 
+        m += ' '.join(self.transcribed_audio_files.keys())
 
     def transcribe(self):
         self.load_audio_filenames()
@@ -145,6 +148,7 @@ class Transcriber:
                 save_pipeline_output_to_file(o, filename,self.output_dir)
                 self.transcribed_audio_files[filename] = o
                 self.did_transcription = True
+                log('transcribed: '+filename,self.device)
                 
 
 def check_device(device):
@@ -165,41 +169,14 @@ def check_device(device):
         print('running on cpu, this will be slow')
         output=device
     elif type(args.device) == int:
-        if type(s.device_available(device)) == int: output = device
+        if type(s.device_available(device)): output = device
         else: output = None 
     if output == None:
         print('could not find a device, doing nothing. Device:',output)
-        log('could not find a device, doing nothing. Device: '+output,device)
+        log('could not find a device, doing nothing. Device: '+str(output),
+            device)
     return output
 
-def check_input_dir(input_dir, device, check_for_audio_files = True):
-    '''
-    check wither the input dir exists 
-    and optionally whether it contains any audio files.
-    '''
-    if not input_dir: input_dir = input_directory
-    output = input_dir
-    if not input_dir.endswith('/'):input_dir += '/'
-    if not os.path.isdir(input_dir): 
-        print(input_dir,'does not exist, doing nothing')
-        log(str(input_dir)+' does not exist, doing nothing',device)
-        output = False
-    elif len(glob.glob(input_dir + '*.wav')) == 0:
-        print(input_dir, 'does not contain .wav files, doing nothing')
-        log(str(input_dir)+ ' does not contain .wav files, doing nothing',device)
-        output = False
-    return output
-    
-def check_output_dir(output_dir,device):
-    ''' checks whether the output dir is an existing directory '''
-    if not output_dir: output_dir = output_directory
-    output = output_dir
-    if not output_dir.endswith('/'):output_dir += '/'
-    if not os.path.isdir(output_dir): 
-        print(output_dir,'does not exist, doing nothing')
-        log(str(output_dir)+' does not exist, doing nothing', device)
-        output = False
-    return output
 
 def remove_status(device):
     ''' removes the old status of the transcribe function in the status_directory. '''
@@ -220,20 +197,24 @@ def set_status(device,status):
     server_name= socket.gethostname()
     f =open(status_directory + server_name + '_' + device + '_' + status,'w')
     f.close()
+
+def pre_checks(args):
+    '''check device and input / output dir'''
+    set_status(str(args.device),'started')
+    device = check_device(args.device)
+    input_dir, output_dir = args.input_dir, args.output_dir
+    if device == None: 
+        raise ValueError('could not start device:',device)
+    if type(input_dir) == str and not input_dir.endswith('/'):
+        input_dir += '/'
+    if not output_dir: output_dir = os.getcwd() 
+    if not output_dir.endswith('/'):
+        output_dir += '/'
+    return device, input_dir, output_dir
     
 
 def transcribe(args):
-    set_status(str(args.device),'started')
-    ok = True
-    device = check_device(args.device)
-    if device == None: ok = False
-    input_dir =  check_input_dir(args.input_dir,device)
-    if not input_dir: ok = False
-    output_dir = check_output_dir(args.output_dir,device)
-    if not output_dir: ok = False
-    if not ok:
-        set_status(str(device),'failed')
-        return
+    device, input_dir, output_dir = pre_checks(args)
     if args.keep_alive_minutes == None: args.keep_alive_minutes = 5
     keep_alive_seconds = args.keep_alive_minutes * 60
     set_status(str(device),'active')
@@ -261,18 +242,7 @@ def transcribe(args):
     
         
 if __name__ == '__main__':
-    m = 'transcribe wav audio file with wav2vec2 ' 
-    p = argparse.ArgumentParser(description=m)
-    p.add_argument('-model_dir', type=str,
-        help='directory where the model is located', required = False)
-    p.add_argument('-input_dir',type=str,
-        help='directory to store transcription',required = False)
-    p.add_argument('-output_dir',type=str,
-        help='directory to store transcription',required = False)
-    p.add_argument('-device',type=int,
-        help='device id',required = False)
-    p.add_argument('-keep_alive_minutes',type=int,
-        help='how long the transcriber proces should linger',required = False)
-    args = p.parse_args()
+    args = argument_handler.transcribe_arguments(add_device_field = True)
+    argument_handler.check_arguments(args)
     transcribe(args)
 
