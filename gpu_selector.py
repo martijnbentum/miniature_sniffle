@@ -2,9 +2,9 @@ import gpu_logger
 import os 
 import socket
 import time
+import ponies
 
-d ={'mlp03':'rarity','mlp10':'thunderlane','mlp12':'snips','mlp13':'mistmane'}
-pony_dict = d
+pony_dict = ponies.pony_dict
 
 class Selector:
     '''select gpu that is not in use based on log files.
