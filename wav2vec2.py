@@ -120,6 +120,7 @@ class Transcriber:
         self.input_dir = input_dir 
         self.output_dir = output_dir 
         self.device = device
+        self.filename = filename
         if pipeline: self.pipeline = pipeline
         elif model: 
             self.model = model
@@ -130,10 +131,12 @@ class Transcriber:
         self.did_transcription= False
     
     def load_audio_filenames(self):
+        self.ok = True
         if self.input_dir:
             self.audio_filenames = glob.glob(self.input_dir + '*.wav')
-        else:
+        elif self.filename:
             self.audio_filenames = [self.filename]
+        else: self.ok = False
         m ='transcribed audio files' 
         m += ' '.join(self.transcribed_audio_files.keys())
 
@@ -210,18 +213,32 @@ def pre_checks(args):
     if not output_dir: output_dir = os.getcwd() 
     if not output_dir.endswith('/'):
         output_dir += '/'
-    return device, input_dir, output_dir
+    if not args.filename or type(args.filename) == str: filename = ''
+    return device, input_dir, output_dir, filename
     
 
+def _check_transcriber_ok(transcriber):
+    transcriber.load_audio_filenames()
+    if not transcriber.ok:
+        m ='could not load audiofiles, input_dir: '+str(transcriber.input_dir)
+        m += ', filename: ' + transcriber.filename
+        log(m, device)
+        log('closing down transcriber', transcriber.device)
+        set_status(str(transcriber.device),'closed')
+        return False
+    return True
+        
+
 def transcribe(args):
-    device, input_dir, output_dir = pre_checks(args)
-    if args.keep_alive_minutes == None: args.keep_alive_minutes = 5
+    device, input_dir, output_dir, filename = pre_checks(args)
+    if args.keep_alive_minutes == None: args.keep_alive_minutes = 0
     keep_alive_seconds = args.keep_alive_minutes * 60
     set_status(str(device),'active')
     print('loading transcriber')
     log('loading transcriber', device)
     transcriber = Transcriber(args.model_dir, input_dir, output_dir,
-        device = device)
+        device = device, filename = args.filename)
+    if not _check_transcriber_ok(transcriber): return
     print('start transcribing')
     log('start transcribing', device)
     last_transcription = time.time()
