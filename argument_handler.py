@@ -1,6 +1,8 @@
 import argparse
 import glob
 import os
+import logger
+import time
 
 def check_arguments(args):
     '''check if argument are usable'''
@@ -52,4 +54,16 @@ def transcribe_arguments(verbose = False, add_device_field = False):
         required = False)
     args = p.parse_args()
     check_arguments(args)
+    return args
+
+def show_log_arguments():
+    m = 'show log for gpu device'
+    p = argparse.ArgumentParser(description=m)
+    p.add_argument('-server_name', type=str,
+        help='server where the gpu is located', required = True)
+    p.add_argument('-device',type=int,
+        help='gpu device number',required = True)
+    p.add_argument('-start_time',type=int,
+        help='epoch time as integer',required = False)
+    args = p.parse_args()
     return args
