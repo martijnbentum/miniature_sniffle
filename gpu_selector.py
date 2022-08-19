@@ -1,10 +1,14 @@
 import gpu_logger
+import glob
+import logger
 import os 
 import socket
 import time
 import ponies
 
 pony_dict = ponies.pony_dict
+
+status_dir = '/vol/tensusers/mbentum/AUDIOSERVER/STATUS/'
 
 class Selector:
     '''select gpu that is not in use based on log files.
@@ -41,17 +45,30 @@ class Selector:
         self.gpus = []
         self.no_memory = []
         self.overload = []
+        self.rejected = []
+        self.active = []
         for line in self.table[::-1]:
             gpu = Gpu(line)
+            reject = False
             if not gpu.ok:continue
+            if gpu.name == 'mlp10':
+                #thunderlane gives an segmentation fault if I try to laod
+                # wav2vec2
+                reject = True
             if gpu.free_memory < self.free_memory: 
                 if gpu not in self.no_memory: self.no_memory.append(gpu)
-                continue
+                reject = True
             if gpu.load > self.max_load: 
                 if gpu not in self.overload:self.overload.append(gpu)
-                continue
-            if gpu.delta_time > self.to_old: break
-            if gpu not in self.gpus: self.gpus.append(gpu)
+                reject = True
+            if gpu.delta_time > self.to_old: reject = True
+            if gpu.status == 'active': 
+                if gpu not in self.active:self.active.append(gpu)
+                reject = True
+            if reject:
+                if gpu not in self.rejected:self.rejected.append(gpu)
+            else:
+                if gpu not in self.gpus: self.gpus.append(gpu)
         self.gpus = sorted(self.gpus, reverse = True)
 
     @property
@@ -108,7 +125,7 @@ class Gpu:
         return self.name == other.name and self.device == other.device
 
     def __gt__(self,other):
-        '''a gpu is large if it has more memory available.'''
+        '''a gpu is larger if it has more memory available.'''
         return self.free_memory > other.free_memory
 
     def _read_line(self):
@@ -135,7 +152,20 @@ class Gpu:
 
     @property
     def free_memory(self):
+        if not hasattr(self,'memory_total'): return 0
         return self.memory_total - self.memory_used
+
+    @property
+    def status(self):
+        status = check_status(self)
+        delta_time = self.delta_time_last_activity
+        if not delta_time or delta_time > 3600:
+            status = 'closed'
+        return status
+
+    @property
+    def delta_time_last_activity(self):
+        return logger.delta_time_last_activity(self)
 
 
 def load_table(filename = ''):
@@ -150,3 +180,12 @@ def load_table(filename = ''):
             table = fin.read().split('\n')
         return table
     else: return False
+
+def check_status(gpu):
+    filename = status_dir + gpu.name + '_' + str(gpu.device)
+    fn = glob.glob(filename + '*')
+    if len(fn) == 0: return None
+    status = fn[0].split('_')[-1]
+    return status
+    
+
