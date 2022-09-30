@@ -11,6 +11,7 @@ import time
 import torch
 from transformers import Wav2Vec2ForCTC
 from transformers import Wav2Vec2Processor
+from transformers import Wav2Vec2ProcessorWithLM
 
 fremy_model1 = 'FremyCompany/xls-r-2b-nl-v2_lm-5gram-os'
 
@@ -28,6 +29,11 @@ status_directory = '/vol/tensusers/mbentum/AUDIOSERVER/STATUS/'
 def load_model(recognizer_dir = default_recognizer_dir):
     model = Wav2Vec2ForCTC.from_pretrained(recognizer_dir)
     return model
+
+def load_processor_with_lm(recognizer_dir = default_recognizer_dir):
+    processor = Wav2Vec2ProcessorWithLM.from_pretrained(recognizer_dir)
+    return processor
+    
 
 def load_processor(recognizer_dir = default_recognizer_dir):
     processor = Wav2Vec2Processor.from_pretrained(recognizer_dir)
@@ -75,22 +81,33 @@ def decode_audiofile(filename, pipeline, start=0.0, end=None):
     output = pipeline(a, return_timestamps = 'word')
     return output 
 
-def _make_decoding_output_filename(audio_filename, output_dir):
+
+def _make_decoding_output_filename(audio_filename, output_dir, extension):
     ''' 
     make a filename for transcription based on audio_filename 
     and output_dir.
     '''
-    filename = audio_filename.replace('.wav','.output')
+    filename = audio_filename.replace('.wav',extension)
     filename = output_dir + filename.split('/')[-1]
     return filename
 
-def save_pipeline_output_to_file(output, audio_filename, output_dir = None):
-    '''save pipeline output to a text file.'''
-    filename = _make_decoding_output_filename(audio_filename, output_dir)
+def save_pipeline_output_to_files(output,audio_filename,output_dir=''):
     table = pipeline_output2table(output)
+    ctm = pipeline_output2ctm(output,audio_filename)
+    save(_table2str(table),audio_filename,'.table',output_dir)
+    save(_table2str(ctm),audio_filename,'.ctm',output_dir)
+    save(output['text'],audio_filename,'.txt',output_dir)
+
+def save(t, audio_filename, extension, output_dir = ''):
+    '''save pipeline output to a file.'''
+    filename= _make_decoding_output_filename(audio_filename, output_dir,
+        extension)
     print('saving to:',filename)
-    with open(filename,'w') as fout:
-        fout.write(_table2str(table))
+    try:
+        with open(filename,'w') as fout:
+            fout.write(t)
+    except PermissionError:
+        print('could not write file to', filename, 'due to a permission error')
 
 def pipeline_output2table(output):
     '''convert pipeline output to table (word\tstart\tend).'''
@@ -99,6 +116,26 @@ def pipeline_output2table(output):
         start, end = d['timestamp']
         table.append([d['text'], start, end])
     return table
+
+def stem_filename(filename):
+    if '/' in filename: filename = filename.split('/')[-1]
+    if '.' in filename: 
+        filename= filename.split('.')[:-1]
+        if len(filename) > 1: filename = '.'.join(filename)
+        else: filename = filename[0]
+    return filename
+
+def pipeline_output2ctm(output, filename):
+    filename = stem_filename(filename)
+    table = pipeline_output2table(output)
+    ctm = []
+    for line in table:
+        word, start, end = line
+        duration = round(end - start,2)
+        line = [filename,1,start,duration,word,'1.00']
+        ctm.append(line)
+    return ctm
+    
 
 def _table2str(table):
     '''convert output table to string.'''
@@ -148,7 +185,7 @@ class Transcriber:
                 print('transcribing: ',filename)
                 log('transcribing: '+filename,self.device)
                 o  = decode_audiofile(filename, self.pipeline)
-                save_pipeline_output_to_file(o, filename,self.output_dir)
+                save_pipeline_output_to_files(o, filename,self.output_dir)
                 self.transcribed_audio_files[filename] = o
                 self.did_transcription = True
                 log('transcribed: '+filename,self.device)
