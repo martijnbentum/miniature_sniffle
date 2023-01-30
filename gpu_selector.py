@@ -13,7 +13,7 @@ status_dir = '/vol/tensusers/mbentum/AUDIOSERVER/STATUS/'
 class Selector:
     '''select gpu that is not in use based on log files.
     '''
-    def __init__(self, to_old = 600, free_memory = 15000, max_load = .1):
+    def __init__(self, to_old = 600, free_memory = 11000, max_load = .1):
         '''select available gpu based on restrictions
         to_old          cut of for to old log data default = 10 minutes
                         log data should be update every 5 minutes with
