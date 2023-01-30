@@ -72,13 +72,14 @@ def load_pipeline(recognizer_dir=None, model = None,chunk_length_s = 10,
     return pipeline
 
 
-def decode_audiofile(filename, pipeline, start=0.0, end=None):
+def decode_audiofile(filename, pipeline, start=0.0, end=None, 
+    timestamp_type = 'word'):
     '''
     transcribe an audio file with pipeline object
     loads the audio with librosa
     '''
     a = audio.load_audio(filename,start,end)
-    output = pipeline(a, return_timestamps = 'word')
+    output = pipeline(a, return_timestamps = timestamp_type)
     return output 
 
 
@@ -95,7 +96,7 @@ def save_pipeline_output_to_files(output,audio_filename,output_dir=''):
     table = pipeline_output2table(output)
     ctm = pipeline_output2ctm(output,audio_filename)
     save(_table2str(table),audio_filename,'.table',output_dir)
-    save(_table2str(ctm),audio_filename,'.ctm',output_dir)
+    save(_table2str(ctm,sep = ' '),audio_filename,'.ctm',output_dir)
     save(output['text'],audio_filename,'.txt',output_dir)
 
 def save(t, audio_filename, extension, output_dir = ''):
@@ -137,17 +138,18 @@ def pipeline_output2ctm(output, filename):
     return ctm
     
 
-def _table2str(table):
+def _table2str(table, sep = '\t'):
     '''convert output table to string.'''
     output = []
     for line in table:
-        output.append('\t'.join(list(map(str,line))))
+        output.append(sep.join(list(map(str,line))))
     return '\n'.join(output)
 
 class Transcriber:
     '''transcribe audio files in input_dir or the audio file filename.'''
     def __init__(self, model_dir = None, input_dir = None, output_dir = None,
-        model = None, pipeline = None, device = -1, filename = ''):
+        model = None, pipeline = None, device = -1, filename = '',
+        timestamp_type = 'word'):
         '''transcribe audio files in input_dir
         model_dir       directory of the wav2vec2 model
         input_dir       directory for audio files that need to be transcribed
@@ -158,6 +160,7 @@ class Transcriber:
         self.output_dir = output_dir 
         self.device = device
         self.filename = filename
+        self.timestamp_type = timestamp_type
         if pipeline: self.pipeline = pipeline
         elif model: 
             self.model = model
@@ -184,7 +187,10 @@ class Transcriber:
             if filename not in self.transcribed_audio_files.keys():
                 print('transcribing: ',filename)
                 log('transcribing: '+filename,self.device)
-                o  = decode_audiofile(filename, self.pipeline)
+                try: o = decode_audiofile(filename, self.pipeline,
+                    timestamp_type = self.timestamp_type)
+                except ValueError:
+                    log('failed to transcribe : '+filename,self.device)
                 save_pipeline_output_to_files(o, filename,self.output_dir)
                 self.transcribed_audio_files[filename] = o
                 self.did_transcription = True
@@ -268,17 +274,23 @@ def _check_transcriber_ok(transcriber):
 
 def transcribe(args):
     device, input_dir, output_dir, filename = pre_checks(args)
+    log('keep_alive: '+str(args.keep_alive_minutes), device)
     if args.keep_alive_minutes == None: args.keep_alive_minutes = 0
     keep_alive_seconds = args.keep_alive_minutes * 60
+    timestamp_type = 'char' if args.label_timestamps else 'word'
+    print('using timestamp type:',timestamp_type)
     set_status(str(device),'active')
     print('loading transcriber')
     log('loading transcriber', device)
     transcriber = Transcriber(args.model_dir, input_dir, output_dir,
-        device = device, filename = args.filename)
+        device = device, filename = args.filename, 
+        timestamp_type = timestamp_type)
     if not _check_transcriber_ok(transcriber): return
     print('start transcribing')
     log('start transcribing', device)
+    log('keep_alive: '+str(keep_alive_seconds), device)
     last_transcription = time.time()
+    log('start transcription: '+str(last_transcription), device)
     while True:
         transcriber.transcribe()
         if transcriber.did_transcription:
