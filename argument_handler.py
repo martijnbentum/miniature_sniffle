@@ -6,7 +6,7 @@ import time
 
 def check_arguments(args):
     '''check if argument are usable'''
-    if not args.filename and not args.input_dir:
+    if not args.filename and not args.input_dir and not args.show_available:
         raise ValueError('either -filename or -input_dir must be provided')
     if args.filename and args.input_dir:
         raise ValueError('either -filename or -input_dir must be provided')
@@ -31,6 +31,12 @@ def arguments_to_command(args, verbose = False):
         command += ' -output_dir ' + os.path.abspath(args.output_dir)
     else:
         command += ' -output_dir ' + os.getcwd() + '/'
+    if args.keep_alive_minutes:
+        command += ' -keep_alive_minutes ' + str(args.keep_alive_minutes)
+    if args.prepare:
+        command += ' -prepare ' 
+    if args.label_timestamps:
+        command += ' -label_timestamps'
     return command
 
 def transcribe_arguments(verbose = False, add_device_field = False):
@@ -51,6 +57,11 @@ def transcribe_arguments(verbose = False, add_device_field = False):
         help='how long the transcriber proces should linger',required = False)
     p.add_argument('-prepare',action='store_true',
         help='start transcriber without audio files in directory',
+        required = False)
+    p.add_argument('-show_available', action='store_true',
+        help='show available and selected gpus', required = False)
+    p.add_argument('-label_timestamps', action='store_true',
+        help='get timestamps at the label level instead of word leve', 
         required = False)
     args = p.parse_args()
     check_arguments(args)
