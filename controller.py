@@ -45,7 +45,18 @@ def get_gpus_selector():
         return get_gpus_selector()
     return s
 
+def handle_show_available():
+    s = gpus.Selector()
+    print('not available')
+    print('\n'.join(map(str,s.rejected)))
+    if s.selected_gpu:
+        device = s.selected_gpu.device
+        server_name = s.selected_gpu.name
+        print('selected gpu: ',server_name,pony_dict[server_name],
+            ', device:',device)
+
 def transcribe(args = None, verbose = True):
+    if args.show_available: return handle_show_available()
     s = get_gpus_selector()
     device = s.selected_gpu.device
     server_name = s.selected_gpu.name
