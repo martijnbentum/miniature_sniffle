@@ -31,6 +31,8 @@ def arguments_to_command(args, verbose = False):
         command += ' -output_dir ' + os.path.abspath(args.output_dir)
     else:
         command += ' -output_dir ' + os.getcwd() + '/'
+    if args.model_dir:
+        command += ' -model_dir ' + os.path.abspath(args.model_dir)
     if args.keep_alive_minutes:
         command += ' -keep_alive_minutes ' + str(args.keep_alive_minutes)
     if args.prepare:
