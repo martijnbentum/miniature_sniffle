@@ -39,7 +39,8 @@ def load_processor(recognizer_dir = default_recognizer_dir):
     processor = Wav2Vec2Processor.from_pretrained(recognizer_dir)
     return processor
 
-def load_pipeline(recognizer_dir=None, model = None,chunk_length_s = 10, 
+def load_pipeline(recognizer_dir=None, model = None,processor = None, 
+    chunk_length_s = 10, 
     device = -1):
     '''
     loads a pipeline object that can transcribe audio files
@@ -57,9 +58,12 @@ def load_pipeline(recognizer_dir=None, model = None,chunk_length_s = 10,
         print('loading model:',recognizer_dir)
         log('loading model: '+ str(recognizer_dir), device)
         model = load_model(recognizer_dir)
-    print('loading processor')
-    log('loading processor',device)
-    p= load_processor(recognizer_dir)
+    if not processor:
+        print('loading processor')
+        log('loading processor',device)
+        print(recognizer_dir)
+        p= load_processor(recognizer_dir)
+    else: p = processor 
     print('loading pipeline')
     log('loading pipeline',device)
     pipeline = ap(
